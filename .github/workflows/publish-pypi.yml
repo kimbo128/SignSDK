@@ -1,0 +1,30 @@
+name: Publish PyPI
+
+on:
+  push:
+    tags:
+      - 'py/v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # required for Trusted Publisher (sigstore provenance)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build
+        run: |
+          pip install hatchling build
+          python -m build
+        working-directory: packages/python
+
+      - name: Publish to PyPI (Trusted Publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: packages/python/dist/

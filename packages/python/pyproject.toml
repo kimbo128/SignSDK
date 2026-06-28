@@ -1,0 +1,25 @@
+[project]
+name = "bittensormcp-sign"
+version = "0.1.0"
+description = "Self-custody signing helper for BittensorMCP — your private key never leaves your machine"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+license = {text = "MIT"}
+keywords = ["bittensor", "polkadot", "sr25519", "self-custody", "bittensormcp"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/kimbo128/SignSDK"
+Repository = "https://github.com/kimbo128/SignSDK"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["bittensormcp_sign"]

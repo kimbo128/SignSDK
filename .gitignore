@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+.env
+packages/python/dist/
+packages/python/*.egg-info/
+packages/npm/dist/
+packages/npm/node_modules/
