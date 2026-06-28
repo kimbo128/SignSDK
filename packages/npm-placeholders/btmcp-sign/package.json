@@ -1,0 +1,16 @@
+{
+  "name": "btmcp-sign",
+  "version": "0.1.0",
+  "description": "Placeholder — please use @bittensormcp/sign instead",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": ["bittensor", "bittensormcp"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kimbo128/SignSDK.git"
+  },
+  "dependencies": {
+    "@bittensormcp/sign": "^0.1.0"
+  }
+}
