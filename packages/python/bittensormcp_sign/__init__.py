@@ -207,6 +207,61 @@ def authenticate(
     return _http_post_json(f"{base}/api/auth/verify", {"ss58": ss58, "nonce": nonce, "signature": signature})
 
 
+# ── Premium activation ───────────────────────────────────────────────────
+#
+# Agent billing path (spec 010): activates or extends premium without a browser.
+# No premium required — this is the mechanism to GET premium.
+
+def activate_premium(
+    endpoint: str,
+    token: str,
+    signer: Signer,
+    amount_tao: float | None = None,
+) -> dict[str, Any]:
+    """
+    Activate or extend premium subscription programmatically (agent billing path).
+
+    Args:
+        endpoint:   Base URL, e.g. "https://bittensormcp.com"
+        token:      Wallet JWT from authenticate()
+        signer:     Callable[bytes -> bytes] or object with .sign(bytes) -> bytes
+        amount_tao: TAO to pay. Defaults to 0.1 (one month). Overpayment credited proportionally.
+
+    Returns:
+        {"subscriptionValidUntil": str, "creditedDays": int, "txHash": str}
+    """
+    base = endpoint.rstrip("/")
+    tao = amount_tao if amount_tao is not None else 0.1
+
+    step1 = _http_post_json_auth(f"{base}/api/billing/sign-transfer", token, {"amountTao": tao})
+
+    payload_hex: str = step1["payload"]
+    intent_id: str = step1["intent_id"]
+
+    payload_bytes = bytes.fromhex(payload_hex.removeprefix("0x"))
+    sign_fn = getattr(signer, "sign", None)
+    sig_bytes: bytes = sign_fn(payload_bytes) if callable(sign_fn) else signer(payload_bytes)  # type: ignore[arg-type]
+    signature = "0x" + sig_bytes.hex()
+
+    return _http_post_json_auth(f"{base}/api/billing/submit-signed", token, {
+        "intent_id": intent_id,
+        "signature": signature,
+    })
+
+
+def _http_post_json_auth(url: str, token: str, payload: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"HTTP {exc.code} from {url}: {exc.read().decode(errors='replace')}") from exc
+
+
 def _http_post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     body = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
@@ -217,5 +272,5 @@ def _http_post_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError(f"HTTP {exc.code} from {url}: {exc.read().decode(errors='replace')}") from exc
 
 
-__all__ = ["sign_and_submit", "generate_wallet", "authenticate"]
-__version__ = "0.2.0"
+__all__ = ["sign_and_submit", "generate_wallet", "authenticate", "activate_premium"]
+__version__ = "0.3.0"

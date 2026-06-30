@@ -202,6 +202,61 @@ export interface AuthenticateResult {
   subscriptionValidUntil: string | null;
 }
 
+// ── Premium activation ───────────────────────────────────────────────────
+//
+// Agent billing path (spec 010): activates or extends premium without a browser.
+// Calls /api/billing/sign-transfer to get an unsigned Transfer extrinsic,
+// signs locally, submits via /api/billing/submit-signed. No premium required
+// to call these endpoints — this is the mechanism to GET premium.
+
+export interface ActivatePremiumOptions {
+  /** Base URL of the BittensorMCP server, e.g. "https://bittensormcp.com" */
+  endpoint: string;
+  /** Wallet JWT from authenticate() */
+  token: string;
+  /** sr25519 signer — same shape as signAndSubmit's signer */
+  signer: (payload: Uint8Array) => Uint8Array | Promise<Uint8Array>;
+  /** TAO amount to pay. Defaults to 0.1 (one month). Overpayment credited proportionally. */
+  amountTao?: number;
+}
+
+export interface ActivatePremiumResult {
+  subscriptionValidUntil: string;
+  creditedDays: number;
+  txHash: string;
+}
+
+export async function activatePremium(opts: ActivatePremiumOptions): Promise<ActivatePremiumResult> {
+  const { endpoint, token, signer, amountTao = 0.1 } = opts;
+  const base = endpoint.replace(/\/$/, '');
+
+  const step1Res = await fetch(`${base}/api/billing/sign-transfer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ amountTao }),
+  });
+  if (!step1Res.ok) {
+    throw new Error(`sign-transfer failed: HTTP ${step1Res.status} ${await step1Res.text()}`);
+  }
+  const { intent_id, payload: payloadHex } = (await step1Res.json()) as {
+    signal: string; intent_id: string; payload: string; expires_at: string;
+  };
+
+  const payloadBytes = hexToBytes(payloadHex);
+  const sigBytes = await signer(payloadBytes);
+  const signature = '0x' + bytesToHex(sigBytes);
+
+  const step2Res = await fetch(`${base}/api/billing/submit-signed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ intent_id, signature }),
+  });
+  if (!step2Res.ok) {
+    throw new Error(`submit-signed failed: HTTP ${step2Res.status} ${await step2Res.text()}`);
+  }
+  return (await step2Res.json()) as ActivatePremiumResult;
+}
+
 export async function authenticate(opts: AuthenticateOptions): Promise<AuthenticateResult> {
   const { endpoint, ss58, signer, domain } = opts;
   const base = endpoint.replace(/\/$/, '');
