@@ -1,6 +1,6 @@
 [project]
 name = "bittensormcp-sign"
-version = "0.2.0"
+version = "0.3.0"
 description = "Self-custody signing helper for BittensorMCP — your private key never leaves your machine"
 readme = "README.md"
 requires-python = ">=3.9"
