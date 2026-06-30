@@ -70,9 +70,42 @@ const { token } = await fetch(`${endpoint}/api/auth/verify`, {
 }).then(r => r.json());
 ```
 
+## Generating a wallet (no human-held keypair needed)
+
+If your agent doesn't already have a coldkey, generate one locally — nothing leaves your process:
+
+```typescript
+import { generateWallet, authenticate, signAndSubmit } from '@bittensormcp/sign';
+
+const wallet = await generateWallet();
+console.log(`Fund this address before writes: ${wallet.ss58}`);
+// wallet.mnemonic is yours to store — this package never persists or sends it
+
+const { token } = await authenticate({
+  endpoint: 'https://bittensormcp.com',
+  ss58: wallet.ss58,
+  signer: wallet.sign,
+});
+
+const result = await signAndSubmit({
+  endpoint: 'https://bittensormcp.com',
+  token,
+  tool: 'bittensor_stake_add',
+  args: { hotkey: '5G1...', amount: 0.01, netuid: 21 },
+  signer: wallet.sign,
+});
+```
+
+Wallet *generation* and *authentication* are fully agentic — no human needs to touch a
+browser extension. *Funding* the address with TAO is the one step that always needs a
+value source outside the system; that's not a limitation of this package, it's what
+self-custody means.
+
 ## Security
 
 - Zero postinstall scripts
-- No runtime dependencies
+- `@polkadot/util-crypto` is the only runtime dependency, used solely by `generateWallet()`
+  (lazy-imported — `signAndSubmit`/`authenticate` alone don't pull it in)
 - No network calls except to your configured `endpoint`
-- Your private key is never passed to this package — only the `signer` callback
+- Your private key is never passed to this package — only the `signer` callback, and
+  `generateWallet()`'s keypair never leaves the closure it's generated in

@@ -82,9 +82,44 @@ resp = urllib.request.urlopen(urllib.request.Request(
 token = json.loads(resp.read())["token"]
 ```
 
+## Generating a wallet (no human-held keypair needed)
+
+If your agent doesn't already have a coldkey, generate one locally — nothing leaves your process:
+
+```python
+from bittensormcp_sign import generate_wallet, authenticate, sign_and_submit
+
+wallet = generate_wallet()  # pip install bittensormcp-sign[wallet]
+print(f"Fund this address before writes: {wallet['ss58']}")
+# wallet["mnemonic"] is yours to store -- this package never persists or sends it
+
+auth = authenticate(
+    endpoint="https://bittensormcp.com",
+    ss58=wallet["ss58"],
+    signer=wallet["sign"],
+)
+
+result = sign_and_submit(
+    endpoint="https://bittensormcp.com",
+    token=auth["token"],
+    tool="bittensor_stake_add",
+    args={"hotkey": "5G1...", "amount": 0.01, "netuid": 21},
+    signer=wallet["sign"],
+)
+```
+
+Wallet *generation* and *authentication* are fully agentic — no human needs to touch a
+browser extension. *Funding* the address with TAO is the one step that always needs a
+value source outside the system; that's not a limitation of this package, it's what
+self-custody means.
+
 ## Security
 
-- Zero runtime dependencies
+- Zero runtime dependencies for `sign_and_submit` / `authenticate`
+- `generate_wallet()` requires the optional `substrateinterface` extra
+  (`pip install bittensormcp-sign[wallet]`) — lazy-imported, so the base install stays
+  dependency-free for bring-your-own-keypair users
 - No postinstall scripts
 - No network calls except to your configured `endpoint`
-- Your private key is never passed to this package — only a signer callable
+- Your private key is never passed to this package — only a signer callable, and
+  `generate_wallet()`'s keypair never leaves the dict it returns

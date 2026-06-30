@@ -1,6 +1,6 @@
 [project]
 name = "bittensormcp-sign"
-version = "0.1.0"
+version = "0.2.0"
 description = "Self-custody signing helper for BittensorMCP — your private key never leaves your machine"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -12,6 +12,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+
+[project.optional-dependencies]
+wallet = ["substrate-interface>=1.7"]
 
 [project.urls]
 Homepage = "https://github.com/kimbo128/SignSDK"

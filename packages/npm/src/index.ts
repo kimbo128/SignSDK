@@ -144,3 +144,91 @@ function hexToBytes(hex: string): Uint8Array {
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
+
+// ── Local wallet generation ──────────────────────────────────────────────
+//
+// Generates a fresh sr25519 keypair entirely in your process. The mnemonic
+// is returned to you and never transmitted anywhere — this package makes
+// zero network calls during generation. @polkadot/util-crypto is loaded
+// lazily so signAndSubmit-only consumers (bring-your-own-keypair) don't pay
+// for it.
+
+export interface GeneratedWallet {
+  /** 12-word mnemonic. Treat as a secret — store it yourself; nothing here persists it. */
+  mnemonic: string;
+  /** SS58-encoded address. Fund this before calling write tools or authenticate(). */
+  ss58: string;
+  /** sr25519 signer bound to this keypair. Pass directly as `signer` to signAndSubmit/authenticate. */
+  sign: (payload: Uint8Array) => Uint8Array;
+}
+
+export async function generateWallet(ss58Format = 42): Promise<GeneratedWallet> {
+  const { mnemonicGenerate, mnemonicToMiniSecret, sr25519PairFromSeed, sr25519Sign, encodeAddress, cryptoWaitReady } =
+    await import('@polkadot/util-crypto');
+
+  await cryptoWaitReady();
+
+  const mnemonic = mnemonicGenerate();
+  const seed = mnemonicToMiniSecret(mnemonic);
+  const pair = sr25519PairFromSeed(seed);
+  const ss58 = encodeAddress(pair.publicKey, ss58Format);
+
+  return {
+    mnemonic,
+    ss58,
+    sign: (payload: Uint8Array) => sr25519Sign(payload, pair),
+  };
+}
+
+// ── Local authentication ─────────────────────────────────────────────────
+//
+// Runs the full challenge -> sign -> verify flow against the server, signing
+// locally with the supplied signer. No private key material crosses this
+// function; only the resulting signature does.
+
+export interface AuthenticateOptions {
+  /** Base URL of the BittensorMCP server, e.g. "https://bittensormcp.com" */
+  endpoint: string;
+  /** SS58 address to authenticate as */
+  ss58: string;
+  /** sr25519 signer for this ss58 — same shape as signAndSubmit's `signer` */
+  signer: (payload: Uint8Array) => Uint8Array | Promise<Uint8Array>;
+  /** Domain bound into the signed message. Defaults to the endpoint's host. */
+  domain?: string;
+}
+
+export interface AuthenticateResult {
+  token: string;
+  subscriptionValidUntil: string | null;
+}
+
+export async function authenticate(opts: AuthenticateOptions): Promise<AuthenticateResult> {
+  const { endpoint, ss58, signer, domain } = opts;
+  const base = endpoint.replace(/\/$/, '');
+  const resolvedDomain = domain ?? new URL(base).host;
+
+  const challengeRes = await fetch(`${base}/api/auth/challenge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ss58, domain: resolvedDomain }),
+  });
+  if (!challengeRes.ok) {
+    throw new Error(`challenge failed: HTTP ${challengeRes.status} ${await challengeRes.text()}`);
+  }
+  const { nonce } = (await challengeRes.json()) as { nonce: string };
+
+  const message = `bittensormcp-auth:${nonce}:${resolvedDomain}`;
+  const messageBytes = new TextEncoder().encode(message);
+  const sigBytes = await signer(messageBytes);
+  const signature = '0x' + bytesToHex(sigBytes);
+
+  const verifyRes = await fetch(`${base}/api/auth/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ss58, nonce, signature }),
+  });
+  if (!verifyRes.ok) {
+    throw new Error(`verify failed: HTTP ${verifyRes.status} ${await verifyRes.text()}`);
+  }
+  return (await verifyRes.json()) as AuthenticateResult;
+}
